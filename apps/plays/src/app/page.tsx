@@ -55,12 +55,15 @@ const GAMES: GameCard[] = [
     badge: { label: "HOT", Icon: Zap, className: "bg-orange-500 text-white" },
   },
   {
-    slug: "soon-runner",
+    slug: "neon-dash",
+    title: "Neon Dash",
     tagKey: "tag_runner",
     Icon: Rabbit,
     accent: "from-fuchsia-500 via-purple-500 to-indigo-600",
-    glow: "",
-    status: "soon",
+    glow: "hover:shadow-fuchsia-500/30",
+    status: "playable",
+    href: "/runner",
+    badge: { label: "NEW", Icon: Sparkles, className: "bg-fuchsia-500 text-white" },
   },
   {
     slug: "soon-puzzle",
