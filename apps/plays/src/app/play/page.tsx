@@ -2,21 +2,33 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { useI18n } from "@/i18n/I18nProvider";
+
+function Loading() {
+  const { t } = useI18n();
+  return <p className="text-center text-slate-400">{t("loading")}</p>;
+}
 
 const GameClient = dynamic(() => import("@/components/GameClient"), {
   ssr: false,
-  loading: () => <p className="text-center text-slate-400">Carregando o sofrimento...</p>,
+  loading: () => <Loading />,
 });
 
 export default function PlayPage() {
+  const { t } = useI18n();
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100">
+    <main className="bg-deep min-h-screen px-4 py-8 text-slate-100">
       <div className="mx-auto max-w-4xl">
         <div className="mb-6 flex items-center justify-between">
-          <Link href="/" className="text-sm text-slate-400 hover:text-slate-200">
-            ← Voltar
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 text-sm text-slate-400 transition hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {t("back")}
           </Link>
-          <h1 className="text-xl font-bold">Plataforma Armadilha</h1>
+          <h1 className="text-xl font-bold">Rage</h1>
           <span className="w-12" />
         </div>
         <GameClient />

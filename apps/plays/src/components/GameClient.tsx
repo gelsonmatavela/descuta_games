@@ -2,7 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import type Phaser from "phaser";
+import { Skull, Flame, Maximize, Smartphone } from "lucide-react";
 import { api, getToken } from "@/lib/api";
+import { useI18n } from "@/i18n/I18nProvider";
+
+// Entra em tela cheia e tenta travar a orientação em paisagem (Android/Chrome).
+// No iOS o lock não existe — aí o aviso de "vire o celular" cobre o caso.
+async function enterLandscape(el: HTMLElement | null) {
+  if (!el) return;
+  try {
+    if (el.requestFullscreen) await el.requestFullscreen();
+    const orientation = screen.orientation as unknown as {
+      lock?: (o: string) => Promise<void>;
+    };
+    if (orientation?.lock) await orientation.lock("landscape");
+  } catch {
+    /* navegador não suporta lock de orientação — fullscreen já ajuda */
+  }
+}
 
 const SLUG = "trap-adventure";
 
@@ -12,6 +29,10 @@ type Overlay =
   | { kind: "win"; deaths: number; seconds: number };
 
 export default function GameClient() {
+  const { t } = useI18n();
+  const tRef = useRef(t);
+  tRef.current = t;
+
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const [deaths, setDeaths] = useState(0);
@@ -31,7 +52,8 @@ export default function GameClient() {
     let mounted = true;
 
     async function showTaunt() {
-      let taunt = "Você morreu. Que surpresa.";
+      // Fallback traduzido; provocações do servidor vêm em PT (conteúdo do banco).
+      let taunt = tRef.current("death_default");
       try {
         const res = await api.taunt(SLUG);
         taunt = res.taunt;
@@ -39,7 +61,6 @@ export default function GameClient() {
         /* backend offline: usa o padrão */
       }
       if (mounted) setOverlay({ kind: "death", taunt });
-      // O overlay some sozinho — a cena já reinicia.
       setTimeout(() => mounted && setOverlay({ kind: "none" }), 1400);
     }
 
@@ -85,14 +106,35 @@ export default function GameClient() {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <div className="flex w-full max-w-[900px] items-center justify-between text-sm">
-        <span className="font-mono text-red-400">💀 Mortes: {deaths}</span>
-        <span className="font-mono text-amber-400">
-          🔥 Fase {level.index + 1}/{level.total}
+      <div className="flex w-full max-w-[900px] items-center justify-between gap-3 text-sm">
+        <span className="flex items-center gap-1.5 font-mono text-red-400">
+          <Skull className="h-4 w-4" />
+          {t("deaths")}: {deaths}
         </span>
-        <span className="text-slate-400">
-          {loggedIn ? "Pontuação será salva" : "Faça login para entrar no ranking"}
+        <span className="flex items-center gap-1.5 font-mono text-amber-400">
+          <Flame className="h-4 w-4" />
+          {t("stage")} {level.index + 1}/{level.total}
         </span>
+        <div className="flex items-center gap-3">
+          <span className="hidden text-slate-400 sm:inline">
+            {loggedIn ? t("score_saved") : t("login_to_rank")}
+          </span>
+          <button
+            onClick={() => enterLandscape(containerRef.current)}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 font-semibold text-slate-200 transition hover:border-blue-500 hover:text-white"
+          >
+            <Maximize className="h-4 w-4" />
+            {t("fullscreen")}
+          </button>
+        </div>
+      </div>
+
+      {/* Dica de orientação — só no celular em modo retrato */}
+      <div className="flex w-full max-w-[900px] items-center justify-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 portrait:flex landscape:hidden md:hidden">
+        <Smartphone className="h-4 w-4 rotate-90" />
+        {t("rotate_hint_a")}
+        <b>{t("fullscreen")}</b>
+        {t("rotate_hint_b")}
       </div>
 
       <div className="relative w-full max-w-[900px]">
@@ -108,24 +150,25 @@ export default function GameClient() {
 
         {overlay.kind === "win" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80">
-            <p className="text-3xl font-black text-green-400">VOCÊ CONSEGUIU!</p>
+            <p className="text-3xl font-black text-green-400">{t("win_title")}</p>
             <p className="text-slate-200">
-              Só precisou morrer <b>{overlay.deaths}</b> vezes em {overlay.seconds}s.
+              {t("win_sub_a")}
+              <b>{overlay.deaths}</b>
+              {t("win_sub_b", { seconds: overlay.seconds })}
             </p>
             <button
               onClick={() => window.location.reload()}
               className="rounded-md bg-green-600 px-4 py-2 font-semibold text-white hover:bg-green-500"
             >
-              Jogar de novo (por quê?)
+              {t("play_again")}
             </button>
           </div>
         )}
       </div>
 
       <div className="max-w-[900px] text-center text-sm text-slate-400">
-        <b>Controles:</b> ← → ou A/D para andar · ↑ / W / Espaço para pular · botões na tela no
-        celular. São {level.total} fases, do aquecimento ao inferno — e as armadilhas mudam de lugar
-        a cada tentativa. Decorar não vai te salvar. 🔥
+        <b>{t("controls_label")}</b>
+        {t("controls_text", { n: level.total })}
       </div>
     </div>
   );
