@@ -1,0 +1,143 @@
+// Dicionário de traduções (pt / en). Placeholders no formato {nome}.
+export type Locale = "pt" | "en";
+
+export const dict = {
+  pt: {
+    // header / nav
+    login: "Entrar",
+    logout: "Sair",
+    nav_home: "Início",
+    nav_games: "Jogos",
+    nav_ranking: "Ranking",
+    nav_account: "Conta",
+    // hero
+    hero_badge: "{n} jogo disponível · mais chegando",
+    hero_title_a: "O arcade que ",
+    hero_highlight: "te odeia",
+    hero_title_b: " de volta.",
+    hero_subtitle:
+      "Uma coleção de jogos 2D feitos para te estressar. Cada pixel é uma traição. Escolha seu sofrimento.",
+    hero_cta: "Começar a sofrer",
+    // stats
+    stat_games: "jogos",
+    stat_ranked: "no ranking",
+    stat_points: "rage points",
+    // catálogo
+    games_title: "Jogos",
+    see_ranking: "ver ranking",
+    coming_soon: "Em breve",
+    play: "Jogar",
+    tag_rage: "Plataforma · Hardcore",
+    tag_runner: "Endless Runner",
+    tag_puzzle: "Puzzle Cruel",
+    tag_shooter: "Shooter Caótico",
+    // ranking
+    lb_title: "Quem mais sofreu (e venceu)",
+    lb_empty: "Ninguém conseguiu ainda. Seja o primeiro lendário.",
+    lb_pts: "pts",
+    lb_deaths: "mortes",
+    // conta
+    tab_login: "Entrar",
+    tab_register: "Criar conta",
+    welcome: "Bem-vindo, ",
+    account_note:
+      "Suas pontuações entram no ranking automaticamente. Agora vai sofrer com propósito.",
+    ph_username: "usuário",
+    ph_email: "email",
+    ph_password: "senha",
+    btn_login: "Entrar",
+    btn_register: "Criar conta",
+    // footer
+    footer_tagline: "Descuta Games — feito para o seu desespero.",
+    powered_by: "powered by",
+    // play
+    back: "Voltar",
+    loading: "Carregando o sofrimento...",
+    // HUD do jogo
+    deaths: "Mortes",
+    stage: "Fase",
+    score_saved: "Pontuação será salva",
+    login_to_rank: "Faça login para entrar no ranking",
+    fullscreen: "Tela cheia",
+    rotate_hint_a: "Vire o celular na horizontal (ou toque em ",
+    rotate_hint_b: ") para jogar melhor.",
+    controls_label: "Controles:",
+    controls_text:
+      " setas ou A/D para andar · W / Espaço para pular · botões na tela no celular. São {n} fases, do aquecimento ao inferno — e as armadilhas mudam de lugar a cada tentativa. Decorar não vai te salvar.",
+    win_title: "VOCÊ CONSEGUIU!",
+    win_sub_a: "Só precisou morrer ",
+    win_sub_b: " vezes em {seconds}s.",
+    play_again: "Jogar de novo (por quê?)",
+    death_default: "Você morreu. Que surpresa.",
+    // cookies
+    cookie_text:
+      "Usamos cookies para manter você logado e melhorar sua experiência de sofrimento. Ao continuar, você concorda com o uso de cookies.",
+    cookie_decline: "Recusar",
+    cookie_accept: "Aceitar",
+  },
+  en: {
+    login: "Log in",
+    logout: "Log out",
+    nav_home: "Home",
+    nav_games: "Games",
+    nav_ranking: "Ranking",
+    nav_account: "Account",
+    hero_badge: "{n} game available · more coming",
+    hero_title_a: "The arcade that ",
+    hero_highlight: "hates you",
+    hero_title_b: " back.",
+    hero_subtitle:
+      "A collection of 2D games built to stress you out. Every pixel is a betrayal. Pick your suffering.",
+    hero_cta: "Start suffering",
+    stat_games: "games",
+    stat_ranked: "ranked",
+    stat_points: "rage points",
+    games_title: "Games",
+    see_ranking: "see ranking",
+    coming_soon: "Coming soon",
+    play: "Play",
+    tag_rage: "Platformer · Hardcore",
+    tag_runner: "Endless Runner",
+    tag_puzzle: "Cruel Puzzle",
+    tag_shooter: "Chaotic Shooter",
+    lb_title: "Who suffered the most (and won)",
+    lb_empty: "No one made it yet. Be the first legend.",
+    lb_pts: "pts",
+    lb_deaths: "deaths",
+    tab_login: "Log in",
+    tab_register: "Sign up",
+    welcome: "Welcome, ",
+    account_note:
+      "Your scores go straight to the ranking. Now you'll suffer with purpose.",
+    ph_username: "username",
+    ph_email: "email",
+    ph_password: "password",
+    btn_login: "Log in",
+    btn_register: "Sign up",
+    footer_tagline: "Descuta Games — made for your despair.",
+    powered_by: "powered by",
+    back: "Back",
+    loading: "Loading the suffering...",
+    deaths: "Deaths",
+    stage: "Stage",
+    score_saved: "Score will be saved",
+    login_to_rank: "Log in to join the ranking",
+    fullscreen: "Fullscreen",
+    rotate_hint_a: "Rotate your phone to landscape (or tap ",
+    rotate_hint_b: ") to play better.",
+    controls_label: "Controls:",
+    controls_text:
+      " arrows or A/D to move · W / Space to jump · on-screen buttons on mobile. There are {n} stages, from warm-up to inferno — and the traps move every attempt. Memorizing won't save you.",
+    win_title: "YOU MADE IT!",
+    win_sub_a: "You only had to die ",
+    win_sub_b: " times in {seconds}s.",
+    play_again: "Play again (why?)",
+    death_default: "You died. What a surprise.",
+    cookie_text:
+      "We use cookies to keep you logged in and improve your suffering experience. By continuing, you agree to the use of cookies.",
+    cookie_decline: "Decline",
+    cookie_accept: "Accept",
+  },
+} as const;
+
+export type TKey = keyof typeof dict.pt;
