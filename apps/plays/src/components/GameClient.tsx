@@ -2,26 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import type Phaser from "phaser";
-import { Skull, Flame, Maximize, Smartphone } from "lucide-react";
+import { Skull, Flame, Maximize, Smartphone, Gamepad2, Hand } from "lucide-react";
 import { api, getToken } from "@/lib/api";
 import { useI18n } from "@/i18n/I18nProvider";
+import type { ControlMode } from "@/game/TrapScene";
 
-// Entra em tela cheia e tenta travar a orientação em paisagem (Android/Chrome).
-// No iOS o lock não existe — aí o aviso de "vire o celular" cobre o caso.
+const SLUG = "trap-adventure";
+const CONTROL_KEY = "rage-control-mode";
+
 async function enterLandscape(el: HTMLElement | null) {
   if (!el) return;
   try {
     if (el.requestFullscreen) await el.requestFullscreen();
-    const orientation = screen.orientation as unknown as {
-      lock?: (o: string) => Promise<void>;
-    };
+    const orientation = screen.orientation as unknown as { lock?: (o: string) => Promise<void> };
     if (orientation?.lock) await orientation.lock("landscape");
   } catch {
-    /* navegador não suporta lock de orientação — fullscreen já ajuda */
+    /* sem lock de orientação */
   }
 }
-
-const SLUG = "trap-adventure";
 
 type Overlay =
   | { kind: "none" }
@@ -35,6 +33,7 @@ export default function GameClient() {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
+  const [control, setControl] = useState<ControlMode | null>(null);
   const [deaths, setDeaths] = useState(0);
   const [level, setLevel] = useState<{ index: number; total: number; name: string }>({
     index: 0,
@@ -49,10 +48,11 @@ export default function GameClient() {
   }, []);
 
   useEffect(() => {
+    if (!control) return;
+    const mode: ControlMode = control;
     let mounted = true;
 
     async function showTaunt() {
-      // Fallback traduzido; provocações do servidor vêm em PT (conteúdo do banco).
       let taunt = tRef.current("death_default");
       try {
         const res = await api.taunt(SLUG);
@@ -67,34 +67,36 @@ export default function GameClient() {
     async function start() {
       const { createGame } = await import("@/game/createGame");
       if (!mounted || !containerRef.current) return;
-
-      gameRef.current = createGame(containerRef.current, {
-        onDeath: (d) => {
-          setDeaths(d);
-          showTaunt();
-        },
-        onLevel: (index, total, name) => {
-          setLevel({ index, total, name });
-          setOverlay({ kind: "none" });
-        },
-        onWin: async ({ deaths, durationSeconds }) => {
-          setOverlay({ kind: "win", deaths, seconds: durationSeconds });
-          if (getToken()) {
-            try {
-              await api.submitRun(SLUG, {
-                score: Math.max(0, 10000 - deaths * 100 - durationSeconds),
-                deaths,
-                duration_seconds: durationSeconds,
-                completed: true,
-              });
-            } catch {
-              /* sem login ou backend offline */
+      gameRef.current = createGame(
+        containerRef.current,
+        {
+          onDeath: (d) => {
+            setDeaths(d);
+            showTaunt();
+          },
+          onLevel: (index, total, name) => {
+            setLevel({ index, total, name });
+            setOverlay({ kind: "none" });
+          },
+          onWin: async ({ deaths, durationSeconds }) => {
+            setOverlay({ kind: "win", deaths, seconds: durationSeconds });
+            if (getToken()) {
+              try {
+                await api.submitRun(SLUG, {
+                  score: Math.max(0, 10000 - deaths * 100 - durationSeconds),
+                  deaths,
+                  duration_seconds: durationSeconds,
+                  completed: true,
+                });
+              } catch {
+                /* sem login ou backend offline */
+              }
             }
-          }
+          },
         },
-      });
+        mode,
+      );
     }
-
     start();
 
     return () => {
@@ -102,7 +104,19 @@ export default function GameClient() {
       gameRef.current?.destroy(true);
       gameRef.current = null;
     };
-  }, []);
+  }, [control]);
+
+  function choose(mode: ControlMode) {
+    try {
+      localStorage.setItem(CONTROL_KEY, mode);
+    } catch {
+      /* ignora */
+    }
+    setControl(mode);
+  }
+
+  const savedControl =
+    typeof window !== "undefined" ? (localStorage.getItem(CONTROL_KEY) as ControlMode | null) : null;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -129,7 +143,6 @@ export default function GameClient() {
         </div>
       </div>
 
-      {/* Dica de orientação — só no celular em modo retrato */}
       <div className="flex w-full max-w-[900px] items-center justify-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 portrait:flex landscape:hidden md:hidden">
         <Smartphone className="h-4 w-4 rotate-90" />
         {t("rotate_hint_a")}
@@ -138,7 +151,42 @@ export default function GameClient() {
       </div>
 
       <div className="relative w-full max-w-[900px]">
-        <div ref={containerRef} className="overflow-hidden rounded-lg border border-slate-700" />
+        <div ref={containerRef} className="min-h-[260px] overflow-hidden rounded-lg border border-slate-700" />
+
+        {/* Tela inicial: tutorial + escolha de controle */}
+        {!control && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-lg bg-black/85 px-6 text-center">
+            <h2 className="text-2xl font-black text-amber-300">{t("tut_title")}</h2>
+            <p className="max-w-md text-sm text-slate-300">{t("rage_goal")}</p>
+            <p className="text-sm font-bold text-slate-100">{t("control_choose")}</p>
+            <div className="flex w-full max-w-md flex-col gap-3 sm:flex-row">
+              <button
+                onClick={() => choose("buttons")}
+                className={`flex-1 rounded-xl border p-4 text-left transition hover:border-amber-400 ${
+                  savedControl === "buttons" ? "border-amber-400 bg-amber-400/10" : "border-white/15 bg-white/5"
+                }`}
+              >
+                <span className="flex items-center gap-2 font-bold">
+                  <Gamepad2 className="h-5 w-5 text-amber-300" />
+                  {t("control_buttons")}
+                </span>
+                <span className="mt-1 block text-xs text-slate-400">{t("control_buttons_desc")}</span>
+              </button>
+              <button
+                onClick={() => choose("gestures")}
+                className={`flex-1 rounded-xl border p-4 text-left transition hover:border-cyan-400 ${
+                  savedControl === "gestures" ? "border-cyan-400 bg-cyan-400/10" : "border-white/15 bg-white/5"
+                }`}
+              >
+                <span className="flex items-center gap-2 font-bold">
+                  <Hand className="h-5 w-5 text-cyan-300" />
+                  {t("control_gestures")}
+                </span>
+                <span className="mt-1 block text-xs text-slate-400">{t("control_gestures_desc")}</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {overlay.kind === "death" && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -149,7 +197,7 @@ export default function GameClient() {
         )}
 
         {overlay.kind === "win" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 px-4 text-center">
             <p className="text-3xl font-black text-green-400">{t("win_title")}</p>
             <p className="text-slate-200">
               {t("win_sub_a")}

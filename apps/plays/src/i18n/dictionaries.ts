@@ -89,6 +89,13 @@ export const dict = {
     tut_magic: "Cenoura dourada = escudo temporário",
     tut_ships: "Cuidado: naves disparam lasers",
     tut_start: "Bora!",
+    rage_goal:
+      "Você é um cão super-herói. Chegue à bandeira sem morrer — as armadilhas mudam a cada tentativa.",
+    control_choose: "Como você quer jogar?",
+    control_buttons: "Setas / Botões",
+    control_buttons_desc: "Teclado (setas, A/D, W/Espaço) ou botões na tela",
+    control_gestures: "Toque e gestos",
+    control_gestures_desc: "Segure para andar · deslize pra cima ou toque para pular",
   },
   en: {
     login: "Log in",
@@ -166,6 +173,13 @@ export const dict = {
     tut_magic: "Golden carrot = temporary shield",
     tut_ships: "Watch out: ships fire lasers",
     tut_start: "Let's go!",
+    rage_goal:
+      "You're a superhero dog. Reach the flag without dying — the traps move every attempt.",
+    control_choose: "How do you want to play?",
+    control_buttons: "Arrows / Buttons",
+    control_buttons_desc: "Keyboard (arrows, A/D, W/Space) or on-screen buttons",
+    control_gestures: "Touch & gestures",
+    control_gestures_desc: "Hold to walk · swipe up or tap to jump",
   },
 } as const;
 

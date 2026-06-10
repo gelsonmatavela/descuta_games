@@ -1,9 +1,10 @@
 import Phaser from "phaser";
-import { TrapScene, TrapSceneCallbacks } from "./TrapScene";
+import { TrapScene, TrapSceneCallbacks, ControlMode } from "./TrapScene";
 
 export function createGame(
   parent: HTMLElement,
   callbacks: TrapSceneCallbacks,
+  controlMode: ControlMode = "buttons",
 ): Phaser.Game {
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -30,6 +31,7 @@ export function createGame(
     levelIndex: 0,
     deaths: 0,
     startTime: 0,
+    controlMode,
   });
   return game;
 }

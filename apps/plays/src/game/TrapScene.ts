@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { LEVEL_CONFIGS, LevelDef, generateLevel, GROUND_Y, WORLD_H } from "./levels";
 
+export type ControlMode = "buttons" | "gestures";
+
 export interface TrapSceneCallbacks {
   onDeath: (deaths: number) => void;
   onLevel: (index: number, total: number, name: string) => void;
@@ -12,6 +14,7 @@ interface SceneData {
   levelIndex: number;
   deaths: number;
   startTime: number; // 0 = ainda não iniciado (primeira fase)
+  controlMode: ControlMode;
 }
 
 export class TrapScene extends Phaser.Scene {
@@ -38,6 +41,9 @@ export class TrapScene extends Phaser.Scene {
   private goal!: Phaser.Physics.Arcade.Sprite;
 
   private touch = { left: false, right: false, jump: false };
+  private jumpQueued = false;
+  private controlMode: ControlMode = "buttons";
+  private lavaEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
 
   constructor() {
     super("TrapScene");
@@ -48,6 +54,7 @@ export class TrapScene extends Phaser.Scene {
     this.levelIndex = data.levelIndex ?? 0;
     this.deaths = data.deaths ?? 0;
     this.startTime = data.startTime || this.time.now;
+    this.controlMode = data.controlMode ?? "buttons";
     // Sorteia um layout novo a cada entrada na fase (morte ou avanço).
     this.level = generateLevel(LEVEL_CONFIGS[this.levelIndex]);
     this.dead = false;
@@ -55,7 +62,7 @@ export class TrapScene extends Phaser.Scene {
   }
 
   preload() {
-    this.makeTexture("player", 24, 32, 0x4ade80);
+    this.drawSuperDog();
     this.makeTexture("ground", 40, 40, 0x334155);
     this.makeTexture("platform", 40, 20, 0x64748b);
     this.makeTexture("fake", 40, 40, 0x334155); // idêntico ao chão de propósito
@@ -74,6 +81,36 @@ export class TrapScene extends Phaser.Scene {
     g.fillStyle(color, 1);
     g.fillCircle(r, r, r);
     g.generateTexture(key, r * 2, r * 2);
+    g.destroy();
+  }
+
+  // Cão super-herói (textura "player").
+  private drawSuperDog() {
+    const g = this.add.graphics();
+    // capa vermelha esvoaçando atrás
+    g.fillStyle(0xdc2626, 1);
+    g.fillTriangle(0, 9, 11, 8, 3, 31);
+    // corpo dourado
+    g.fillStyle(0xd4a017, 1);
+    g.fillRoundedRect(7, 13, 18, 18, 5);
+    // cabeça
+    g.fillRoundedRect(12, 3, 17, 16, 6);
+    // orelha pendurada
+    g.fillStyle(0xa16207, 1);
+    g.fillRoundedRect(12, 4, 5, 13, 2);
+    // focinho
+    g.fillStyle(0xeab308, 1);
+    g.fillRoundedRect(24, 11, 7, 7, 2);
+    // nariz e olho
+    g.fillStyle(0x0f172a, 1);
+    g.fillCircle(30, 13, 1.7);
+    g.fillCircle(24, 10, 1.8);
+    // emblema no peito
+    g.fillStyle(0x2563eb, 1);
+    g.fillCircle(14, 23, 3.2);
+    g.fillStyle(0xfde047, 1);
+    g.fillCircle(14, 23, 1.5);
+    g.generateTexture("player", 33, 34);
     g.destroy();
   }
 
@@ -154,23 +191,35 @@ export class TrapScene extends Phaser.Scene {
       block.setData("dropped", false);
     }
 
-    // Lava: poças na superfície do chão. A colisão é checada manualmente
-    // em update() (lavaRects) — overlap arcade com corpo estático
-    // redimensionado é pouco confiável. Aqui só desenhamos a poça.
+    // Lava: chamas ardentes de verdade (partículas) sobre uma base brilhante.
+    // A colisão é checada manualmente em update() via lavaRects.
     this.lavaRects = lv.lava;
+    this.lavaEmitters = [];
     for (const l of lv.lava) {
-      const lava = this.add.image(l.x + l.w / 2, GROUND_Y - 9, "lava");
-      lava.setDisplaySize(l.w, 22);
-      lava.setTint(0xf97316);
-      lava.setDepth(5);
+      // base incandescente
+      const base = this.add.image(l.x + l.w / 2, GROUND_Y - 2, "lava");
+      base.setDisplaySize(l.w, 12).setTint(0xfacc15).setDepth(4);
       this.tweens.add({
-        targets: lava,
-        alpha: { from: 0.65, to: 1 },
-        scaleY: { from: lava.scaleY * 0.8, to: lava.scaleY * 1.15 },
+        targets: base,
+        alpha: { from: 0.6, to: 1 },
         yoyo: true,
         repeat: -1,
-        duration: 280 + Math.random() * 200,
+        duration: 220 + Math.random() * 160,
       });
+      // chamas subindo (fogo a arder)
+      const fire = this.add.particles(0, 0, "spark", {
+        x: { min: l.x + 2, max: l.x + l.w - 2 },
+        y: GROUND_Y - 4,
+        speedY: { min: -110, max: -40 },
+        speedX: { min: -18, max: 18 },
+        scale: { start: 2.2, end: 0 },
+        lifespan: { min: 280, max: 560 },
+        frequency: Math.max(18, 70 - l.w / 4),
+        tint: [0xfde047, 0xf97316, 0xef4444],
+        blendMode: "ADD",
+      });
+      fire.setDepth(5);
+      this.lavaEmitters.push(fire);
     }
 
     // Bolas de fogo: emissores que cospem projéteis em ciclo.
@@ -233,6 +282,9 @@ export class TrapScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(this.level.spawnX, this.level.spawnY, "player");
     this.player.setCollideWorldBounds(false);
     this.player.setBounce(0);
+    // Hitbox justa no corpo do cão (a textura é maior que a hitbox).
+    this.player.body!.setSize(20, 28);
+    (this.player.body as Phaser.Physics.Arcade.Body).setOffset(7, 5);
 
     this.physics.add.collider(this.player, this.solids);
     this.physics.add.collider(this.player, this.fallingGroup);
@@ -265,6 +317,11 @@ export class TrapScene extends Phaser.Scene {
   }
 
   private setupTouchControls() {
+    if (this.controlMode === "gestures") {
+      this.setupGestureControls();
+      return;
+    }
+
     const cam = this.cameras.main;
     const mk = (x: number, label: string, onDown: () => void, onUp: () => void) => {
       const btn = this.add
@@ -289,6 +346,34 @@ export class TrapScene extends Phaser.Scene {
     mk(cam.width - 130, "PULAR", () => (this.touch.jump = true), () => (this.touch.jump = false));
   }
 
+  // Modo gestos: segurar = andar pra frente; deslizar pra cima ou tocar = pular.
+  private setupGestureControls() {
+    let startY = 0;
+    let startT = 0;
+    let swiped = false;
+
+    this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      startY = p.y;
+      startT = this.time.now;
+      swiped = false;
+      this.touch.right = true; // anda pra frente enquanto segura
+    });
+
+    this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+      if (!p.isDown) return;
+      if (!swiped && startY - p.y > 34) {
+        swiped = true;
+        this.jumpQueued = true; // deslizou pra cima = pular
+      }
+    });
+
+    this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
+      this.touch.right = false;
+      // toque rápido sem deslizar = pular
+      if (!swiped && this.time.now - startT < 220) this.jumpQueued = true;
+    });
+  }
+
   update() {
     if (this.dead || this.won) return;
 
@@ -300,11 +385,18 @@ export class TrapScene extends Phaser.Scene {
     const jump =
       this.cursors.up.isDown || this.keys.W.isDown || this.keys.SPACE.isDown || this.touch.jump;
 
-    if (left) this.player.setVelocityX(-220);
-    else if (right) this.player.setVelocityX(220);
-    else this.player.setVelocityX(0);
+    if (left) {
+      this.player.setVelocityX(-220);
+      this.player.setFlipX(true);
+    } else if (right) {
+      this.player.setVelocityX(220);
+      this.player.setFlipX(false);
+    } else {
+      this.player.setVelocityX(0);
+    }
 
-    if (jump && onGround) this.player.setVelocityY(-440);
+    if ((jump || this.jumpQueued) && onGround) this.player.setVelocityY(-440);
+    this.jumpQueued = false;
 
     // Cair no buraco = morte.
     if (this.player.y > WORLD_H + 40) this.die();
@@ -421,6 +513,7 @@ export class TrapScene extends Phaser.Scene {
       levelIndex,
       deaths: this.deaths,
       startTime: this.startTime,
+      controlMode: this.controlMode,
     } satisfies SceneData);
   }
 }
