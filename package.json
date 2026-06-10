@@ -1,0 +1,15 @@
+{
+  "name": "rage-games",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Plataforma de jogos 2D feitos para estressar o jogador",
+  "scripts": {
+    "dev:plays": "pnpm --filter plays dev",
+    "dev:admin": "pnpm --filter admin dev",
+    "build": "pnpm -r build",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "backend:dev": "cd backend && cargo run"
+  },
+  "packageManager": "pnpm@10.33.2"
+}
