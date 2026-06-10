@@ -1,7 +1,7 @@
-# Rage Games — Plataforma Armadilha
+# Rage Games — Rage
 
 Plataforma de jogos 2D web feitos para **estressar o jogador**. O primeiro jogo é
-o *Plataforma Armadilha*: um platformer cheio de armadilhas traiçoeiras (chão falso,
+o *Rage*: um platformer cheio de armadilhas traiçoeiras (chão falso,
 picos escondidos, blocos que caem). Você vai morrer muito — e o servidor vai zombar de você.
 
 ## Arquitetura (monorepo)

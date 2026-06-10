@@ -8,7 +8,7 @@ CREATE TABLE players (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Catalogo de jogos (ex.: "Plataforma Armadilha")
+-- Catalogo de jogos (ex.: "Rage")
 CREATE TABLE games (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     slug       TEXT NOT NULL UNIQUE,
@@ -43,7 +43,7 @@ CREATE TABLE taunts (
 );
 
 INSERT INTO games (slug, name, difficulty) VALUES
-    ('trap-adventure', 'Plataforma Armadilha', 6);
+    ('trap-adventure', 'Rage', 6);
 
 INSERT INTO taunts (game_id, text)
 SELECT id, t.text FROM games, (VALUES

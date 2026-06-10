@@ -81,7 +81,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     <main className="min-h-screen bg-slate-950 p-8 text-slate-100">
       <div className="mx-auto max-w-5xl space-y-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Painel — Plataforma Armadilha</h1>
+          <h1 className="text-2xl font-bold">Painel — Rage</h1>
           <button onClick={onLogout} className="rounded-md border border-slate-700 px-3 py-1.5 text-sm">
             Sair
           </button>
