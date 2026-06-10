@@ -66,6 +66,15 @@ export class TrapScene extends Phaser.Scene {
     this.makeCircle("fireball", 14, 0xfb923c);
     this.makeTexture("flame", 40, 80, 0xf59e0b);
     this.makeTexture("enemy", 28, 28, 0xa855f7);
+    this.makeDot("spark", 5, 0xffffff);
+  }
+
+  private makeDot(key: string, r: number, color: number) {
+    const g = this.add.graphics();
+    g.fillStyle(color, 1);
+    g.fillCircle(r, r, r);
+    g.generateTexture(key, r * 2, r * 2);
+    g.destroy();
   }
 
   private makeTexture(key: string, w: number, h: number, color: number) {
@@ -145,7 +154,7 @@ export class TrapScene extends Phaser.Scene {
       block.setData("dropped", false);
     }
 
-    // 🔥 Lava: poças na superfície do chão. A colisão é checada manualmente
+    // Lava: poças na superfície do chão. A colisão é checada manualmente
     // em update() (lavaRects) — overlap arcade com corpo estático
     // redimensionado é pouco confiável. Aqui só desenhamos a poça.
     this.lavaRects = lv.lava;
@@ -164,7 +173,7 @@ export class TrapScene extends Phaser.Scene {
       });
     }
 
-    // 🔥 Bolas de fogo: emissores que cospem projéteis em ciclo.
+    // Bolas de fogo: emissores que cospem projéteis em ciclo.
     this.fireballGroup = this.physics.add.group({ allowGravity: false });
     for (const fb of lv.fireballs) {
       const spawn = () => {
@@ -178,7 +187,7 @@ export class TrapScene extends Phaser.Scene {
       this.time.addEvent({ delay: fb.everyMs, loop: true, callback: spawn });
     }
 
-    // 🔥 Lança-chamas: jato que liga/desliga.
+    // Lança-chamas: jato que liga/desliga.
     this.flameGroup = this.physics.add.staticGroup();
     for (const ft of lv.flamethrowers) {
       const flame = this.flameGroup.create(ft.x, ft.y, "flame") as Phaser.Physics.Arcade.Sprite;
@@ -200,7 +209,7 @@ export class TrapScene extends Phaser.Scene {
       this.time.delayedCall(ft.startDelay ?? 0, cycle);
     }
 
-    // 👾 Atacantes: patrulham horizontalmente.
+    // Atacantes: patrulham horizontalmente.
     this.attackerGroup = this.physics.add.group({ allowGravity: false, immovable: true });
     for (const at of lv.attackers) {
       const enemy = this.attackerGroup.create(at.x, at.y, "enemy") as Phaser.Physics.Arcade.Sprite;
@@ -275,9 +284,9 @@ export class TrapScene extends Phaser.Scene {
       return btn;
     };
 
-    mk(20, "◀", () => (this.touch.left = true), () => (this.touch.left = false));
-    mk(110, "▶", () => (this.touch.right = true), () => (this.touch.right = false));
-    mk(cam.width - 110, "⤒", () => (this.touch.jump = true), () => (this.touch.jump = false));
+    mk(20, "<", () => (this.touch.left = true), () => (this.touch.left = false));
+    mk(110, ">", () => (this.touch.right = true), () => (this.touch.right = false));
+    mk(cam.width - 130, "PULAR", () => (this.touch.jump = true), () => (this.touch.jump = false));
   }
 
   update() {
@@ -300,7 +309,7 @@ export class TrapScene extends Phaser.Scene {
     // Cair no buraco = morte.
     if (this.player.y > WORLD_H + 40) this.die();
 
-    // 🔥 Lava: morre se estiver sobre uma poça E baixo (perto do chão).
+    // Lava: morre se estiver sobre uma poça E baixo (perto do chão).
     // Pular por cima salva (o corpo sobe acima da faixa de lava).
     for (const l of this.lavaRects) {
       if (body.right > l.x && body.left < l.x + l.w && body.bottom > GROUND_Y - 16) {
@@ -358,11 +367,33 @@ export class TrapScene extends Phaser.Scene {
     if (this.dead || this.won) return;
     this.dead = true;
     this.deaths += 1;
-    this.player.setTint(0xff0000);
+
+    const px = this.player.x;
+    const py = this.player.y;
+
+    // Explosão de faíscas no ponto da morte.
+    const emitter = this.add.particles(px, py, "spark", {
+      speed: { min: 80, max: 360 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 1.5, end: 0 },
+      lifespan: { min: 300, max: 650 },
+      tint: [0xff5722, 0xffc107, 0xff1744, 0xffffff],
+      blendMode: "ADD",
+      emitting: false,
+    });
+    emitter.explode(30, px, py);
+    this.time.delayedCall(800, () => emitter.destroy());
+
+    // Player "estoura": cresce, fica vermelho e some.
+    this.player.setTint(0xff3030);
     this.player.setVelocity(0, 0);
     (this.player.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    this.tweens.add({ targets: this.player, scale: 1.7, alpha: 0, duration: 240, ease: "Quad.easeOut" });
+
     this.callbacks.onDeath(this.deaths);
-    this.cameras.main.shake(200, 0.01);
+    this.cameras.main.shake(260, 0.02);
+    this.cameras.main.flash(180, 255, 70, 40);
+
     // Reinicia a MESMA fase, preservando mortes e cronômetro.
     this.time.delayedCall(600, () => this.restartScene(this.levelIndex));
   }
