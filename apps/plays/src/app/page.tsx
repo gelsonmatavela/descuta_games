@@ -74,12 +74,15 @@ const GAMES: GameCard[] = [
     status: "soon",
   },
   {
-    slug: "soon-shooter",
+    slug: "warfront",
+    title: "Warfront",
     tagKey: "tag_shooter",
     Icon: Target,
     accent: "from-emerald-400 via-teal-500 to-green-600",
-    glow: "",
-    status: "soon",
+    glow: "hover:shadow-emerald-500/30",
+    status: "playable",
+    href: "/war",
+    badge: { label: "3D", Icon: Sparkles, className: "bg-emerald-500 text-black" },
   },
 ];
 

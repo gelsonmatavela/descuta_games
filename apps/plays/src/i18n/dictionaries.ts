@@ -16,7 +16,7 @@ export const dict = {
     hero_highlight: "te odeia",
     hero_title_b: " de volta.",
     hero_subtitle:
-      "Uma coleção de jogos 2D feitos para te estressar. Cada pixel é uma traição. Escolha seu sofrimento.",
+      "Uma coleção de jogos feitos para te estressar. Cada pixel é uma traição. Escolha seu sofrimento.",
     hero_cta: "Começar a sofrer",
     // stats
     stat_games: "jogos",
@@ -96,6 +96,24 @@ export const dict = {
     control_buttons_desc: "Teclado (setas, A/D, W/Espaço) ou botões na tela",
     control_gestures: "Toque e gestos",
     control_gestures_desc: "Segure para andar · deslize pra cima ou toque para pular",
+    // Warfront (FPS 3D)
+    war_hp: "Vida",
+    war_wave: "Onda",
+    war_wave_n: "ONDA {n}",
+    war_enemies: "Inimigos",
+    war_kills: "Baixas",
+    war_gameover: "VOCÊ CAIU EM COMBATE",
+    war_reloading: "Recarregando...",
+    war_click_aim: "Clique para mirar",
+    war_fire: "FOGO",
+    war_goal:
+      "Zona de guerra 3D. Soldados inimigos chegam em ondas cada vez maiores — sobreviva o máximo que conseguir. Eliminar uma onda recupera vida.",
+    war_tut_move: "WASD / setas para andar · Espaço pula (no celular: arraste o lado esquerdo)",
+    war_tut_aim: "Mouse para mirar (no celular: arraste o lado direito)",
+    war_tut_shoot: "Clique (ou segure) para atirar · botão FOGO no celular",
+    war_tut_reload: "R para recarregar — o pente tem 30 balas",
+    war_controls:
+      " WASD/setas anda · mouse mira · clique atira · R recarrega · Espaço pula. No celular: lado esquerdo anda, lado direito mira, botão FOGO atira. As ondas não acabam. Você vai cair. É só uma questão de quando.",
   },
   en: {
     login: "Log in",
@@ -109,7 +127,7 @@ export const dict = {
     hero_highlight: "hates you",
     hero_title_b: " back.",
     hero_subtitle:
-      "A collection of 2D games built to stress you out. Every pixel is a betrayal. Pick your suffering.",
+      "A collection of games built to stress you out. Every pixel is a betrayal. Pick your suffering.",
     hero_cta: "Start suffering",
     stat_games: "games",
     stat_ranked: "ranked",
@@ -180,6 +198,24 @@ export const dict = {
     control_buttons_desc: "Keyboard (arrows, A/D, W/Space) or on-screen buttons",
     control_gestures: "Touch & gestures",
     control_gestures_desc: "Hold to walk · swipe up or tap to jump",
+    // Warfront (3D FPS)
+    war_hp: "Health",
+    war_wave: "Wave",
+    war_wave_n: "WAVE {n}",
+    war_enemies: "Enemies",
+    war_kills: "Kills",
+    war_gameover: "YOU FELL IN COMBAT",
+    war_reloading: "Reloading...",
+    war_click_aim: "Click to aim",
+    war_fire: "FIRE",
+    war_goal:
+      "A 3D war zone. Enemy soldiers come in ever-bigger waves — survive as long as you can. Clearing a wave restores health.",
+    war_tut_move: "WASD / arrows to move · Space jumps (on mobile: drag the left side)",
+    war_tut_aim: "Mouse to aim (on mobile: drag the right side)",
+    war_tut_shoot: "Click (or hold) to shoot · FIRE button on mobile",
+    war_tut_reload: "R to reload — the mag holds 30 rounds",
+    war_controls:
+      " WASD/arrows move · mouse aims · click shoots · R reloads · Space jumps. On mobile: left side moves, right side aims, FIRE button shoots. The waves never end. You will fall. It's just a matter of when.",
   },
 } as const;
 
