@@ -350,6 +350,10 @@ class WarGame {
     this.gameTime = 0;
     this.velY = 0;
     this.firing = false;
+    // gameTime volta a 0: timers absolutos precisam zerar junto, senão o
+    // clarão fica preso ligado e o tiro é recusado até o relógio alcançá-los
+    this.nextFireAt = 0;
+    this.muzzleUntil = 0;
     this.gunKick = 0;
     this.shake = 0;
     this.startedAt = performance.now();
