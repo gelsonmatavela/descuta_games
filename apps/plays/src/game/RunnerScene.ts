@@ -15,7 +15,8 @@ const SPEED_MAX = 820;
 const SPEED_ACCEL = 12; // aceleração contínua (px/s por s)
 const LEVEL_DIST = 1400; // distância por "grau" de velocidade
 const LEVEL_BOOST = 32; // boost de velocidade por grau
-const JUMP_V = -540;
+const JUMP_V = -640; // calibrado para a gravidade 1350 (salto mais curto e rápido)
+const FALL_GRAVITY_BONUS = 1200; // gravidade extra na descida: o coelho cai rápido em vez de "flutuar"
 const MAX_JUMPS = 2;
 const SHIELD_MS = 6000;
 
@@ -343,6 +344,7 @@ export class RunnerScene extends Phaser.Scene {
       this.jump();
 
     const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.setGravityY(body.velocity.y > 0 ? FALL_GRAVITY_BONUS : 0);
     if (body.blocked.down) this.jumpsLeft = MAX_JUMPS;
 
     // Move e recicla tudo.

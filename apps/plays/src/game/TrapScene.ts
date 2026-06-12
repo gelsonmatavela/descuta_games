@@ -41,6 +41,11 @@ export class TrapScene extends Phaser.Scene {
   private goal!: Phaser.Physics.Arcade.Sprite;
 
   private touch = { left: false, right: false, jump: false };
+  private touchButtons: {
+    rect: Phaser.Geom.Rectangle;
+    key: "left" | "right" | "jump";
+    btn: Phaser.GameObjects.Text;
+  }[] = [];
   private jumpQueued = false;
   private controlMode: ControlMode = "buttons";
   private lavaEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
@@ -55,6 +60,10 @@ export class TrapScene extends Phaser.Scene {
     this.deaths = data.deaths ?? 0;
     this.startTime = data.startTime || this.time.now;
     this.controlMode = data.controlMode ?? "buttons";
+    // Zera o estado de toque: a cena reinicia com a mesma instância e um dedo
+    // segurado durante a morte deixava o botão "preso".
+    this.touch = { left: false, right: false, jump: false };
+    this.jumpQueued = false;
     // Sorteia um layout novo a cada entrada na fase (morte ou avanço).
     this.level = generateLevel(LEVEL_CONFIGS[this.levelIndex]);
     this.dead = false;
@@ -323,27 +332,43 @@ export class TrapScene extends Phaser.Scene {
     }
 
     const cam = this.cameras.main;
-    const mk = (x: number, label: string, onDown: () => void, onUp: () => void) => {
+    this.touchButtons = [];
+    const mk = (x: number, label: string, key: "left" | "right" | "jump") => {
       const btn = this.add
-        .text(x, cam.height - 70, label, {
-          fontSize: "40px",
+        .text(x, cam.height - 80, label, {
+          fontSize: "44px",
           backgroundColor: "#1e293b",
           color: "#e2e8f0",
-          padding: { x: 18, y: 10 },
+          padding: { x: 24, y: 14 },
         })
         .setScrollFactor(0)
-        .setInteractive()
         .setAlpha(0.6)
         .setDepth(1000);
-      btn.on("pointerdown", onDown);
-      btn.on("pointerup", onUp);
-      btn.on("pointerout", onUp);
-      return btn;
+      // Área de toque maior que o desenho (folga para o dedo).
+      const m = 16;
+      const rect = new Phaser.Geom.Rectangle(btn.x - m, btn.y - m, btn.width + m * 2, btn.height + m * 2);
+      this.touchButtons.push({ rect, key, btn });
     };
 
-    mk(20, "<", () => (this.touch.left = true), () => (this.touch.left = false));
-    mk(110, ">", () => (this.touch.right = true), () => (this.touch.right = false));
-    mk(cam.width - 130, "PULAR", () => (this.touch.jump = true), () => (this.touch.jump = false));
+    mk(20, "<", "left");
+    mk(130, ">", "right");
+    mk(cam.width - 160, "PULAR", "jump");
+  }
+
+  // Lê todos os ponteiros ativos a cada frame em vez de eventos pointerdown/up:
+  // suporta toques simultâneos e nunca deixa botão "preso" após restart da cena.
+  private pollTouchButtons() {
+    this.touch.left = this.touch.right = this.touch.jump = false;
+    for (const b of this.touchButtons) b.btn.setAlpha(0.6);
+    for (const p of this.input.manager.pointers) {
+      if (!p.isDown) continue;
+      for (const b of this.touchButtons) {
+        if (b.rect.contains(p.x, p.y)) {
+          this.touch[b.key] = true;
+          b.btn.setAlpha(1);
+        }
+      }
+    }
   }
 
   // Modo gestos: segurar = andar pra frente; deslizar pra cima ou tocar = pular.
@@ -376,6 +401,8 @@ export class TrapScene extends Phaser.Scene {
 
   update() {
     if (this.dead || this.won) return;
+
+    if (this.controlMode === "buttons") this.pollTouchButtons();
 
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const onGround = body.blocked.down || body.touching.down;

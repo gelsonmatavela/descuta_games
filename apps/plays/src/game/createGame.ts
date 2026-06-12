@@ -16,6 +16,10 @@ export function createGame(
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
+    input: {
+      // Vários dedos ao mesmo tempo (andar + pular juntos no celular).
+      activePointers: 4,
+    },
     physics: {
       default: "arcade",
       arcade: {

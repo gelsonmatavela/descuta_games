@@ -15,7 +15,7 @@ export function createRunnerGame(parent: HTMLElement, callbacks: RunnerCallbacks
     physics: {
       default: "arcade",
       arcade: {
-        gravity: { x: 0, y: 900 },
+        gravity: { x: 0, y: 1350 },
         debug: false,
       },
     },
