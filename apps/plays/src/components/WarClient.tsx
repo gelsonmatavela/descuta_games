@@ -12,6 +12,9 @@ import {
   MousePointer,
   Move,
   RefreshCw,
+  Volume2,
+  VolumeX,
+  X,
 } from "lucide-react";
 import { api, getToken } from "@/lib/api";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -19,6 +22,7 @@ import type { WarGameApi, WarHud } from "@/game/WarGame";
 
 const SLUG = "warfront";
 const BEST_KEY = "warfront-best";
+const SOUND_KEY = "warfront-sound";
 
 async function enterLandscape(el: HTMLElement | null) {
   if (!el) return;
@@ -48,8 +52,10 @@ export default function WarClient() {
   const [started, setStarted] = useState(false);
   const [locked, setLocked] = useState(false);
   const [isTouch, setIsTouch] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
   const [hud, setHud] = useState<WarHud>({
-    hp: 100,
+    lives: 10,
+    maxLives: 10,
     ammo: 30,
     reloading: false,
     score: 0,
@@ -60,6 +66,7 @@ export default function WarClient() {
   const [best, setBest] = useState(0);
   const [waveFlash, setWaveFlash] = useState<number | null>(null);
   const [damaged, setDamaged] = useState(0);
+  const [hitMark, setHitMark] = useState<{ id: number; kill: boolean } | null>(null);
   const [overlay, setOverlay] = useState<Overlay>({ kind: "none" });
   const [loggedIn, setLoggedIn] = useState(false);
 
@@ -68,12 +75,15 @@ export default function WarClient() {
     const saved = Number(localStorage.getItem(BEST_KEY) || 0);
     bestRef.current = saved;
     setBest(saved);
+    setSoundOn(localStorage.getItem(SOUND_KEY) !== "off");
   }, []);
 
   useEffect(() => {
     if (!started) return;
     let mounted = true;
     let waveTimer: ReturnType<typeof setTimeout>;
+    let hitTimer: ReturnType<typeof setTimeout>;
+    let hitId = 0;
 
     async function start() {
       const { createWarGame } = await import("@/game/WarGame");
@@ -81,6 +91,13 @@ export default function WarClient() {
       const game = createWarGame(containerRef.current, {
         onHud: (h) => mounted && setHud(h),
         onDamage: () => mounted && setDamaged((d) => d + 1),
+        onHit: (killed) => {
+          if (!mounted) return;
+          hitId += 1;
+          setHitMark({ id: hitId, kill: killed });
+          clearTimeout(hitTimer);
+          hitTimer = setTimeout(() => mounted && setHitMark(null), killed ? 260 : 140);
+        },
         onLock: (l) => mounted && setLocked(l),
         onWave: (w) => {
           if (!mounted) return;
@@ -126,6 +143,7 @@ export default function WarClient() {
       });
       gameRef.current = game;
       setIsTouch(game.isTouch);
+      game.setSound(localStorage.getItem(SOUND_KEY) !== "off");
       game.lock();
     }
     start();
@@ -133,6 +151,7 @@ export default function WarClient() {
     return () => {
       mounted = false;
       clearTimeout(waveTimer);
+      clearTimeout(hitTimer);
       gameRef.current?.destroy();
       gameRef.current = null;
     };
@@ -147,6 +166,17 @@ export default function WarClient() {
     return () => clearTimeout(id);
   }, [damaged]);
 
+  function toggleSound() {
+    const next = !soundOn;
+    setSoundOn(next);
+    try {
+      localStorage.setItem(SOUND_KEY, next ? "on" : "off");
+    } catch {
+      /* ignora */
+    }
+    gameRef.current?.setSound(next);
+  }
+
   function restart() {
     setOverlay({ kind: "none" });
     gameRef.current?.restart();
@@ -154,6 +184,7 @@ export default function WarClient() {
   }
 
   const playing = started && overlay.kind === "none";
+  const lowLives = playing && hud.lives > 0 && hud.lives <= 4;
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -166,13 +197,25 @@ export default function WarClient() {
           <Swords className="h-4 w-4" />
           {t("war_wave")} {hud.wave} · {t("war_enemies")}: {hud.enemiesLeft}
         </span>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <span className="hidden text-slate-400 sm:inline">
             {loggedIn ? t("score_saved") : t("login_to_rank")}
           </span>
           <span className="hidden font-mono text-slate-400 sm:inline">
             {t("runner_best")}: {best}
           </span>
+          <button
+            onClick={toggleSound}
+            aria-label={soundOn ? t("war_sound_off") : t("war_sound_on")}
+            title={soundOn ? t("war_sound_off") : t("war_sound_on")}
+            className={`grid h-9 w-9 place-items-center rounded-lg border transition ${
+              soundOn
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:border-emerald-400"
+                : "border-white/10 bg-white/5 text-slate-500 hover:border-slate-400 hover:text-slate-300"
+            }`}
+          >
+            {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </button>
           <button
             onClick={() => enterLandscape(wrapRef.current)}
             className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-white"
@@ -196,31 +239,48 @@ export default function WarClient() {
           className="aspect-video w-full overflow-hidden rounded-lg border border-slate-700 bg-[#1a2018]"
         />
 
-        {/* Mira */}
+        {/* Mira + hit marker */}
         {playing && (locked || isTouch) && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center">
-            <Crosshair className="h-6 w-6 text-white/80 drop-shadow" strokeWidth={1.5} />
+            {hitMark ? (
+              <X
+                className={`h-7 w-7 drop-shadow ${hitMark.kill ? "text-red-500" : "text-white"}`}
+                strokeWidth={3}
+              />
+            ) : (
+              <Crosshair className="h-6 w-6 text-white/80 drop-shadow" strokeWidth={1.5} />
+            )}
           </div>
         )}
 
-        {/* Vinheta de dano */}
+        {/* Vinheta de dano + alerta de vida baixa */}
         {showVignette && (
           <div className="pointer-events-none absolute inset-0 rounded-lg bg-red-600/25 ring-8 ring-inset ring-red-600/40" />
         )}
+        {lowLives && !showVignette && (
+          <div className="pointer-events-none absolute inset-0 animate-pulse rounded-lg ring-8 ring-inset ring-red-600/25" />
+        )}
 
-        {/* HUD inferior: vida + munição */}
+        {/* HUD inferior: corações + munição */}
         {playing && (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-3">
-            <div className="w-44 max-w-[40%]">
-              <span className="mb-1 flex items-center gap-1 text-xs font-bold text-red-300">
-                <Heart className="h-3.5 w-3.5" /> {t("war_hp")} {hud.hp}
-              </span>
-              <div className="h-2.5 overflow-hidden rounded-full bg-black/50">
-                <div
-                  className={`h-full rounded-full transition-all ${hud.hp > 40 ? "bg-emerald-500" : "bg-red-500"}`}
-                  style={{ width: `${hud.hp}%` }}
-                />
-              </div>
+            <div className="flex items-center gap-1 rounded-lg bg-black/45 px-2.5 py-1.5">
+              {Array.from({ length: hud.maxLives / 2 }).map((_, i) => {
+                const halves = hud.lives - i * 2;
+                return (
+                  <span key={i} className="relative h-5 w-5">
+                    <Heart className="absolute inset-0 h-5 w-5 text-red-900" />
+                    {halves >= 1 && (
+                      <span
+                        className="absolute inset-0 overflow-hidden"
+                        style={{ width: halves >= 2 ? "100%" : "50%" }}
+                      >
+                        <Heart className="h-5 w-5 fill-red-500 text-red-400" />
+                      </span>
+                    )}
+                  </span>
+                );
+              })}
             </div>
             <div className="rounded-lg bg-black/50 px-3 py-1.5 font-mono text-lg font-bold text-amber-200">
               {hud.reloading ? t("war_reloading") : `${hud.ammo}/30`}
@@ -274,6 +334,9 @@ export default function WarClient() {
               </li>
               <li className="flex items-center gap-2">
                 <RefreshCw className="h-4 w-4 text-amber-300" /> {t("war_tut_reload")}
+              </li>
+              <li className="flex items-center gap-2">
+                <Heart className="h-4 w-4 text-red-400" /> {t("war_tut_lives")}
               </li>
             </ul>
             <button

@@ -1,7 +1,9 @@
 import * as THREE from "three";
+import { WarAudio } from "./WarAudio";
 
 export interface WarHud {
-  hp: number;
+  lives: number; // em metades de coração (2 tiros inimigos = 1 coração)
+  maxLives: number;
   ammo: number;
   reloading: boolean;
   score: number;
@@ -13,6 +15,7 @@ export interface WarHud {
 export interface WarCallbacks {
   onHud: (hud: WarHud) => void;
   onDamage: () => void;
+  onHit: (killed: boolean) => void;
   onLock: (locked: boolean) => void;
   onWave: (wave: number) => void;
   onGameOver: (stats: { score: number; wave: number; kills: number; durationSeconds: number }) => void;
@@ -23,6 +26,7 @@ export interface WarGameApi {
   restart: () => void;
   setFiring: (firing: boolean) => void;
   reload: () => void;
+  setSound: (on: boolean) => void;
   isTouch: boolean;
   destroy: () => void;
 }
@@ -37,18 +41,25 @@ const RELOAD_S = 1.4;
 const FIRE_INTERVAL = 0.12; // segurar o tiro = rajada automática
 const BULLET_DMG = 15;
 const ENEMY_HP = 30;
+const MAX_HALF_LIVES = 10; // 5 corações; cada tiro inimigo tira meio
 const MOUSE_SENS = 0.0023;
 const TOUCH_LOOK_SENS = 0.006;
+
+const CAMO_COLORS = [0x44523a, 0x575243, 0x4a4438, 0x3c4a4d];
+const SKIN_TONES = [0xc9a07a, 0x9a6a45, 0xe2bb95, 0x7c4f33];
 
 interface Enemy {
   root: THREE.Group;
   meshes: THREE.Mesh[];
+  legs: [THREE.Mesh, THREE.Mesh];
   hp: number;
   speed: number;
   stopDist: number;
   nextShot: number; // em gameTime (s)
   strafeDir: number;
   strafeUntil: number;
+  hitUntil: number; // flash vermelho ao ser atingido
+  walkPhase: number;
   dead: boolean;
   removeAt: number;
 }
@@ -74,6 +85,14 @@ class WarGame {
   private camera: THREE.PerspectiveCamera;
   private playerRig = new THREE.Object3D(); // yaw fica no rig, pitch na câmera
   private raycaster = new THREE.Raycaster();
+  private audio = new WarAudio();
+
+  private gun!: THREE.Group;
+  private muzzleFlash!: THREE.Mesh;
+  private muzzleLight!: THREE.PointLight;
+  private gunKick = 0;
+  private muzzleUntil = 0;
+  private shake = 0;
 
   private yaw = 0;
   private pitch = 0;
@@ -82,7 +101,7 @@ class WarGame {
   private moveTouch = { id: -1, ox: 0, oy: 0, dx: 0, dy: 0 };
   private lookTouch = { id: -1, lx: 0, ly: 0 };
 
-  private hp = 100;
+  private halfLives = MAX_HALF_LIVES;
   private ammo = MAG_SIZE;
   private reloadEnd = 0; // 0 = não está recarregando
   private score = 0;
@@ -102,7 +121,7 @@ class WarGame {
   private solidMeshes: THREE.Mesh[] = [];
   private lastHud = "";
   private raf = 0;
-  private clock = new THREE.Clock();
+  private lastTime = 0;
   private resizeObs: ResizeObserver;
   private destroyed = false;
 
@@ -122,6 +141,7 @@ class WarGame {
     this.scene.add(this.playerRig);
 
     this.buildWorld();
+    this.buildGun();
     this.bindEvents();
 
     this.resizeObs = new ResizeObserver(() => this.resize());
@@ -129,6 +149,7 @@ class WarGame {
     this.resize();
 
     this.reset();
+    this.lastTime = performance.now();
     this.raf = requestAnimationFrame(this.loop);
   }
 
@@ -223,10 +244,53 @@ class WarGame {
     };
   }
 
-  // ── Soldado inimigo (low-poly) ───────────────────────────────────────
-  private buildSoldier(): { root: THREE.Group; meshes: THREE.Mesh[] } {
+  // ── Fuzil em primeira pessoa ─────────────────────────────────────────
+  private buildGun() {
+    this.gun = new THREE.Group();
+    const part = (geo: THREE.BufferGeometry, color: number, x: number, y: number, z: number) => {
+      const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
+      m.position.set(x, y, z);
+      this.gun.add(m);
+      return m;
+    };
+    part(new THREE.BoxGeometry(0.07, 0.09, 0.34), 0x23251f, 0, 0, 0); // ferrolho
+    part(new THREE.BoxGeometry(0.045, 0.045, 0.32), 0x141511, 0, 0.012, -0.31); // cano
+    part(new THREE.BoxGeometry(0.06, 0.07, 0.18), 0x2e2a22, 0, -0.012, -0.16); // guarda-mão
+    part(new THREE.BoxGeometry(0.05, 0.15, 0.08), 0x1c1e19, 0, -0.11, 0.03); // carregador
+    part(new THREE.BoxGeometry(0.06, 0.1, 0.16), 0x33301f, 0, -0.025, 0.22); // coronha
+    part(new THREE.BoxGeometry(0.018, 0.045, 0.06), 0x121310, 0, 0.065, -0.04); // alça de mira
+
+    // clarão de boca: plano aditivo no fim do cano + luz pontual
+    this.muzzleFlash = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.3, 0.3),
+      new THREE.MeshBasicMaterial({
+        color: 0xffe9a0,
+        transparent: true,
+        opacity: 0.95,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    this.muzzleFlash.position.set(0, 0.012, -0.5);
+    this.muzzleFlash.visible = false;
+    this.gun.add(this.muzzleFlash);
+
+    this.muzzleLight = new THREE.PointLight(0xffc966, 0, 7);
+    this.muzzleLight.position.set(0, 0.012, -0.45);
+    this.gun.add(this.muzzleLight);
+
+    this.gun.position.set(0.32, -0.28, -0.55);
+    this.camera.add(this.gun);
+  }
+
+  // ── Soldado inimigo v2 (colete, braços, fuzil, pernas animadas) ─────
+  private buildSoldier(): { root: THREE.Group; meshes: THREE.Mesh[]; legs: [THREE.Mesh, THREE.Mesh] } {
     const root = new THREE.Group();
     const meshes: THREE.Mesh[] = [];
+    const camo = CAMO_COLORS[Math.floor(Math.random() * CAMO_COLORS.length)];
+    const dark = new THREE.Color(camo).multiplyScalar(0.65).getHex();
+    const skin = SKIN_TONES[Math.floor(Math.random() * SKIN_TONES.length)];
+
     const add = (geo: THREE.BufferGeometry, color: number, x: number, y: number, z: number) => {
       const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
       m.position.set(x, y, z);
@@ -234,13 +298,37 @@ class WarGame {
       meshes.push(m);
       return m;
     };
-    add(new THREE.BoxGeometry(0.72, 0.92, 0.42), 0x3f4a2f, 0, 1.06, 0); // tronco
-    add(new THREE.BoxGeometry(0.34, 0.34, 0.34), 0xc9a07a, 0, 1.72, 0); // cabeça
-    add(new THREE.BoxGeometry(0.42, 0.16, 0.44), 0x2f3a24, 0, 1.92, 0); // capacete
-    add(new THREE.BoxGeometry(0.2, 0.62, 0.24), 0x33392a, -0.2, 0.31, 0); // pernas
-    add(new THREE.BoxGeometry(0.2, 0.62, 0.24), 0x33392a, 0.2, 0.31, 0);
-    add(new THREE.BoxGeometry(0.13, 0.13, 0.85), 0x1c1f1a, 0.22, 1.28, 0.35); // arma
-    return { root, meshes };
+
+    // pernas com pivô no quadril (geometria deslocada) para animar a marcha
+    const legGeo = new THREE.BoxGeometry(0.19, 0.62, 0.23);
+    legGeo.translate(0, -0.31, 0);
+    const legL = add(legGeo, dark, -0.14, 0.64, 0);
+    const legR = add(legGeo.clone(), dark, 0.14, 0.64, 0);
+    add(new THREE.BoxGeometry(0.2, 0.08, 0.3), 0x1d1d18, -0.14, 0.04, 0.03); // botas
+    add(new THREE.BoxGeometry(0.2, 0.08, 0.3), 0x1d1d18, 0.14, 0.04, 0.03);
+
+    add(new THREE.BoxGeometry(0.6, 0.64, 0.32), camo, 0, 1.0, 0); // tronco
+    add(new THREE.BoxGeometry(0.64, 0.34, 0.38), 0x2c3226, 0, 1.06, 0); // colete
+    add(new THREE.BoxGeometry(0.16, 0.1, 0.12), 0x23251f, -0.16, 1.12, -0.22); // bolsos do colete
+    add(new THREE.BoxGeometry(0.16, 0.1, 0.12), 0x23251f, 0.16, 1.12, -0.22);
+
+    // braços apontando o fuzil para frente
+    add(new THREE.BoxGeometry(0.13, 0.13, 0.46), camo, 0.26, 1.16, 0.16); // braço direito
+    add(new THREE.BoxGeometry(0.12, 0.12, 0.34), camo, -0.08, 1.1, 0.3); // braço esquerdo (apoio)
+    add(new THREE.BoxGeometry(0.07, 0.07, 0.09), skin, 0.22, 1.16, 0.36); // mãos
+    add(new THREE.BoxGeometry(0.07, 0.07, 0.09), skin, -0.05, 1.1, 0.44);
+
+    // fuzil
+    add(new THREE.BoxGeometry(0.09, 0.11, 0.62), 0x1c1f1a, 0.1, 1.16, 0.38);
+    add(new THREE.BoxGeometry(0.04, 0.04, 0.3), 0x121310, 0.1, 1.18, 0.78); // cano
+    add(new THREE.BoxGeometry(0.05, 0.13, 0.07), 0x151712, 0.1, 1.06, 0.32); // carregador
+
+    // cabeça + capacete com aba
+    add(new THREE.BoxGeometry(0.3, 0.3, 0.3), skin, 0, 1.48, 0);
+    add(new THREE.BoxGeometry(0.4, 0.17, 0.44), dark, 0, 1.68, 0);
+    add(new THREE.BoxGeometry(0.44, 0.045, 0.5), dark, 0, 1.6, 0.02);
+
+    return { root, meshes, legs: [legL, legR] };
   }
 
   // ── Estado / ondas ───────────────────────────────────────────────────
@@ -252,7 +340,7 @@ class WarGame {
     this.tracers = [];
     this.flashes = [];
 
-    this.hp = 100;
+    this.halfLives = MAX_HALF_LIVES;
     this.ammo = MAG_SIZE;
     this.reloadEnd = 0;
     this.score = 0;
@@ -262,7 +350,10 @@ class WarGame {
     this.gameTime = 0;
     this.velY = 0;
     this.firing = false;
+    this.gunKick = 0;
+    this.shake = 0;
     this.startedAt = performance.now();
+    this.audio.setHeartbeat(false);
 
     this.playerRig.position.set(0, EYE_Y, 0);
     this.yaw = 0;
@@ -274,9 +365,10 @@ class WarGame {
   private spawnWave() {
     this.wave += 1;
     this.cb.onWave(this.wave);
+    this.audio.waveHorn();
     const count = 3 + this.wave * 2;
     for (let i = 0; i < count; i++) {
-      const { root, meshes } = this.buildSoldier();
+      const { root, meshes, legs } = this.buildSoldier();
       const ang = Math.random() * Math.PI * 2;
       const dist = 32 + Math.random() * 18;
       const px = this.playerRig.position.x + Math.cos(ang) * dist;
@@ -290,12 +382,15 @@ class WarGame {
       const enemy: Enemy = {
         root,
         meshes,
+        legs,
         hp: ENEMY_HP + Math.floor(this.wave / 3) * 10,
         speed: Math.min(5, 2.6 + this.wave * 0.18 + Math.random() * 0.8),
         stopDist: 13 + Math.random() * 9,
         nextShot: this.gameTime + 1 + Math.random() * 1.5,
         strafeDir: Math.random() > 0.5 ? 1 : -1,
         strafeUntil: this.gameTime + 1 + Math.random() * 2,
+        hitUntil: 0,
+        walkPhase: Math.random() * Math.PI * 2,
         dead: false,
         removeAt: 0,
       };
@@ -336,6 +431,7 @@ class WarGame {
   // Toque: metade esquerda = joystick de andar, metade direita = mirar.
   private onTouchStart = (e: TouchEvent) => {
     e.preventDefault();
+    this.audio.resume();
     const rect = this.renderer.domElement.getBoundingClientRect();
     for (const t of Array.from(e.changedTouches)) {
       const x = t.clientX - rect.left;
@@ -408,6 +504,7 @@ class WarGame {
   }
 
   lock() {
+    this.audio.resume();
     if (this.isTouch || this.locked()) return;
     try {
       // Em alguns browsers retorna Promise; rejeição (lock negado) não pode estourar.
@@ -422,6 +519,10 @@ class WarGame {
     this.firing = f;
   }
 
+  setSound(on: boolean) {
+    this.audio.setEnabled(on);
+  }
+
   private jump() {
     if (this.over) return;
     if (this.playerRig.position.y <= EYE_Y + 0.01) this.velY = JUMP_V;
@@ -429,6 +530,7 @@ class WarGame {
 
   reload() {
     if (this.over || this.reloadEnd > 0 || this.ammo === MAG_SIZE) return;
+    this.audio.reload();
     this.reloadEnd = this.gameTime + RELOAD_S;
     this.pushHud(true);
   }
@@ -436,10 +538,16 @@ class WarGame {
   // ── Tiro ─────────────────────────────────────────────────────────────
   private shoot() {
     if (this.ammo <= 0) {
+      this.audio.emptyClick();
       this.reload();
       return;
     }
     this.ammo -= 1;
+    this.audio.playerShot();
+
+    // recuo visual: arma chuta + clarão de boca
+    this.gunKick = 1;
+    this.muzzleUntil = this.gameTime + 0.045;
 
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     const targets: THREE.Object3D[] = [...this.solidMeshes];
@@ -450,10 +558,8 @@ class WarGame {
     this.camera.getWorldPosition(origin);
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);
-    const muzzle = origin
-      .clone()
-      .add(dir.clone().multiplyScalar(0.7))
-      .add(new THREE.Vector3(0, -0.12, 0));
+    const muzzle = new THREE.Vector3();
+    this.muzzleFlash.getWorldPosition(muzzle);
     let end = origin.clone().add(dir.multiplyScalar(150));
 
     const hit = hits[0];
@@ -462,15 +568,23 @@ class WarGame {
       const enemy = hit.object.userData.enemy as Enemy | undefined;
       if (enemy && !enemy.dead) {
         enemy.hp -= BULLET_DMG;
+        enemy.hitUntil = this.gameTime + 0.12;
         this.spawnFlash(hit.point, 0xcc2222);
-        if (enemy.hp <= 0) this.killEnemy(enemy);
+        if (enemy.hp <= 0) {
+          this.killEnemy(enemy);
+          this.audio.kill();
+          this.cb.onHit(true);
+        } else {
+          this.audio.hitMarker();
+          this.cb.onHit(false);
+        }
       } else {
         this.spawnFlash(hit.point, 0xd8c98a);
       }
     }
 
     this.spawnTracer(muzzle, end, 0xffe08a);
-    // recuo
+    // recuo da mira
     this.pitch = Math.min(1.45, this.pitch + 0.006);
     this.yaw += (Math.random() - 0.5) * 0.004;
     this.pushHud(true);
@@ -506,14 +620,31 @@ class WarGame {
   private loop = () => {
     if (this.destroyed) return;
     this.raf = requestAnimationFrame(this.loop);
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    const now = performance.now();
+    const dt = Math.min((now - this.lastTime) / 1000, 0.05);
+    this.lastTime = now;
 
     // No desktop a simulação pausa sem pointer lock (menu/aba). No toque roda sempre.
     const running = !this.over && (this.isTouch || this.locked());
     if (running) this.tick(dt);
 
+    // arma: recuo e clarão
+    this.gunKick *= Math.exp(-dt * 13);
+    this.gun.position.z = -0.55 + this.gunKick * 0.085;
+    this.gun.rotation.x = this.gunKick * 0.07;
+    const flashOn = this.gameTime < this.muzzleUntil;
+    this.muzzleFlash.visible = flashOn;
+    this.muzzleFlash.rotation.z = Math.random() * Math.PI;
+    this.muzzleLight.intensity = flashOn ? 2.2 : 0;
+
+    // tremor de câmera ao levar dano
+    this.shake *= Math.exp(-dt * 7);
+    const jx = (Math.random() - 0.5) * this.shake;
+    const jz = (Math.random() - 0.5) * this.shake;
+
     this.playerRig.rotation.y = this.yaw;
-    this.camera.rotation.x = this.pitch;
+    this.camera.rotation.x = this.pitch + jx;
+    this.camera.rotation.z = jz * 0.6;
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -581,11 +712,18 @@ class WarGame {
       const dist = Math.hypot(dx, dz);
       e.root.rotation.y = Math.atan2(dx, dz);
 
+      // flash vermelho quando atingido
+      const flashing = this.gameTime < e.hitUntil;
+      for (const m of e.meshes) {
+        (m.material as THREE.MeshLambertMaterial).emissive.setHex(flashing ? 0x7a1010 : 0x000000);
+      }
+
       if (this.gameTime > e.strafeUntil) {
         e.strafeDir *= -1;
         e.strafeUntil = this.gameTime + 1 + Math.random() * 2;
       }
 
+      let moving = true;
       if (dist > e.stopDist) {
         e.root.position.x += (dx / dist) * e.speed * dt;
         e.root.position.z += (dz / dist) * e.speed * dt;
@@ -593,8 +731,16 @@ class WarGame {
         // perto: anda de lado pra ser alvo difícil
         e.root.position.x += (-dz / dist) * e.strafeDir * e.speed * 0.5 * dt;
         e.root.position.z += (dx / dist) * e.strafeDir * e.speed * 0.5 * dt;
+        moving = false;
       }
-      e.root.position.y = Math.abs(Math.sin(this.gameTime * 9 + e.stopDist)) * 0.06;
+
+      // marcha: pernas balançam (mais devagar no strafe)
+      e.walkPhase += dt * (moving ? 9 : 5);
+      const swing = Math.sin(e.walkPhase) * (moving ? 0.5 : 0.22);
+      e.legs[0].rotation.x = swing;
+      e.legs[1].rotation.x = -swing;
+      e.root.position.y = Math.abs(Math.sin(e.walkPhase)) * 0.05;
+
       this.resolveCollisions(e.root.position, 0.6);
       e.root.position.x = THREE.MathUtils.clamp(e.root.position.x, -ARENA + 1, ARENA - 1);
       e.root.position.z = THREE.MathUtils.clamp(e.root.position.z, -ARENA + 1, ARENA - 1);
@@ -617,10 +763,11 @@ class WarGame {
 
     // ── ondas
     if (alive === 0 && this.nextWaveAt === 0) {
-      // onda eliminada: bônus + cura e agenda a próxima
+      // onda eliminada: bônus + recupera 1 coração e agenda a próxima
       if (this.wave > 0) {
         this.score += 250;
-        this.hp = Math.min(100, this.hp + 30);
+        this.halfLives = Math.min(MAX_HALF_LIVES, this.halfLives + 2);
+        this.audio.setHeartbeat(this.halfLives <= 4);
       }
       this.nextWaveAt = this.gameTime + 2.5;
       this.pushHud(true);
@@ -654,7 +801,7 @@ class WarGame {
   }
 
   private enemyShoot(e: Enemy, dist: number) {
-    const muzzle = e.root.position.clone().add(new THREE.Vector3(0, 1.3, 0));
+    const muzzle = e.root.position.clone().add(new THREE.Vector3(0, 1.18, 0));
     // chance de acerto cai com a distância
     const pHit = THREE.MathUtils.clamp(0.42 - dist * 0.006, 0.08, 0.42);
     const hitPlayer = Math.random() < pHit;
@@ -667,11 +814,21 @@ class WarGame {
     this.spawnTracer(muzzle, target, 0xff7b54);
     this.spawnFlash(muzzle, 0xffd27a);
 
+    // som posicional: pan conforme o lado de onde veio o tiro
+    const local = e.root.position.clone();
+    this.camera.worldToLocal(local);
+    const pan = THREE.MathUtils.clamp(local.normalize().x, -1, 1);
+    this.audio.enemyShot(pan, dist);
+
     if (hitPlayer) {
-      this.hp -= 5 + Math.floor(Math.random() * 7);
+      // cada tiro inimigo tira MEIO coração (2 tiros = 1 vida)
+      this.halfLives -= 1;
+      this.shake = 0.06;
+      this.audio.damage();
+      this.audio.setHeartbeat(!this.over && this.halfLives > 0 && this.halfLives <= 4);
       this.cb.onDamage();
       this.pushHud(true);
-      if (this.hp <= 0) this.gameOver();
+      if (this.halfLives <= 0) this.gameOver();
     }
   }
 
@@ -691,8 +848,10 @@ class WarGame {
   private gameOver() {
     if (this.over) return;
     this.over = true;
-    this.hp = 0;
+    this.halfLives = 0;
     this.firing = false;
+    this.audio.setHeartbeat(false);
+    this.audio.gameOver();
     this.pushHud(true);
     if (this.locked()) document.exitPointerLock();
     const durationSeconds = Math.round((performance.now() - this.startedAt) / 1000);
@@ -701,7 +860,8 @@ class WarGame {
 
   private pushHud(force: boolean) {
     const hud: WarHud = {
-      hp: Math.max(0, this.hp),
+      lives: Math.max(0, this.halfLives),
+      maxLives: MAX_HALF_LIVES,
       ammo: this.ammo,
       reloading: this.reloadEnd > 0,
       score: this.score,
@@ -732,6 +892,7 @@ class WarGame {
     cancelAnimationFrame(this.raf);
     this.resizeObs.disconnect();
     this.unbindEvents();
+    this.audio.destroy();
     if (this.locked()) document.exitPointerLock();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -745,6 +906,7 @@ export function createWarGame(parent: HTMLElement, callbacks: WarCallbacks): War
     restart: () => game.restart(),
     setFiring: (f) => game.setFiring(f),
     reload: () => game.reload(),
+    setSound: (on) => game.setSound(on),
     isTouch: game.isTouch,
     destroy: () => game.destroy(),
   };

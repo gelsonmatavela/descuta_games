@@ -97,7 +97,6 @@ export const dict = {
     control_gestures: "Toque e gestos",
     control_gestures_desc: "Segure para andar · deslize pra cima ou toque para pular",
     // Warfront (FPS 3D)
-    war_hp: "Vida",
     war_wave: "Onda",
     war_wave_n: "ONDA {n}",
     war_enemies: "Inimigos",
@@ -112,6 +111,9 @@ export const dict = {
     war_tut_aim: "Mouse para mirar (no celular: arraste o lado direito)",
     war_tut_shoot: "Clique (ou segure) para atirar · botão FOGO no celular",
     war_tut_reload: "R para recarregar — o pente tem 30 balas",
+    war_tut_lives: "5 corações — cada tiro inimigo tira meio · eliminar a onda recupera 1",
+    war_sound_on: "Ligar som",
+    war_sound_off: "Desligar som",
     war_controls:
       " WASD/setas anda · mouse mira · clique atira · R recarrega · Espaço pula. No celular: lado esquerdo anda, lado direito mira, botão FOGO atira. As ondas não acabam. Você vai cair. É só uma questão de quando.",
   },
@@ -199,7 +201,6 @@ export const dict = {
     control_gestures: "Touch & gestures",
     control_gestures_desc: "Hold to walk · swipe up or tap to jump",
     // Warfront (3D FPS)
-    war_hp: "Health",
     war_wave: "Wave",
     war_wave_n: "WAVE {n}",
     war_enemies: "Enemies",
@@ -214,6 +215,9 @@ export const dict = {
     war_tut_aim: "Mouse to aim (on mobile: drag the right side)",
     war_tut_shoot: "Click (or hold) to shoot · FIRE button on mobile",
     war_tut_reload: "R to reload — the mag holds 30 rounds",
+    war_tut_lives: "5 hearts — each enemy hit takes half · clearing a wave restores 1",
+    war_sound_on: "Turn sound on",
+    war_sound_off: "Turn sound off",
     war_controls:
       " WASD/arrows move · mouse aims · click shoots · R reloads · Space jumps. On mobile: left side moves, right side aims, FIRE button shoots. The waves never end. You will fall. It's just a matter of when.",
   },
